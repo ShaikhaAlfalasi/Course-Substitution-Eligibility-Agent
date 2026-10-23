@@ -1,0 +1,110 @@
+# Course Substitution Eligibility Constraints
+
+## 1. Original Course Cannot Be Completed Before Graduation
+
+The student must have no remaining opportunity to complete the original course before or during their expected graduation semester.
+
+- Retrieve the student's `Expected_Graduation_Term` and the current academic term.
+- Consult `course_offerings_knowledge_base.txt` to identify when the original course is offered.
+- Examine every remaining Fall and Spring semester from the current academic term through the expected graduation semester, inclusive.
+- Check the knowledge base for Fall, Spring, and Summer offerings when determining whether the original course can be completed before graduation.
+- If the original course is offered in any remaining semester before or during graduation, the student does not satisfy this condition.
+- If the original course is confirmed not to be offered in any remaining semester before or during graduation, the student satisfies this condition.
+- Apply the evaluation conditions defined in Section 7 when the available information is insufficient to determine the outcome.
+
+## 2. Proposed Course Must Be at the Same Academic Level or Higher
+
+The proposed course must be at the same or a higher academic level than the original course.
+
+- Compare the original and proposed `Course_ID` values.
+- For the seven-digit CS course IDs covered by this project:
+  - The fifth digit represents the intended year of study.
+  - The final two digits represent the course level.
+- The proposed course satisfies this condition if its intended year is higher than the original course's year, or if both years are equal and the proposed course's level is equal to or higher than the original course's level.
+- If the proposed course is at a lower intended year, or at a lower level within the same year, it does not satisfy this condition.
+- If either course ID is missing, invalid, or cannot be interpreted, apply the evaluation conditions defined in Section 7.
+
+## 3. Original Course Must Be a Core Course
+
+The original course requested for substitution must be a core requirement rather than an elective.
+
+- Verify the original course's classification using the relevant official program study plan or authoritative course classification data.
+- Major compulsory courses and other compulsory courses required by the student's program may satisfy this condition.
+- A course listed as a major elective does not satisfy this condition merely because it belongs to the Computer Science program.
+- If the course's classification cannot be established from the available evidence, apply the evaluation conditions defined in Section 7.
+
+## 4. Proposed Course Must Be Offered in the Requested Semester
+
+The proposed course must be offered in the semester specified in the substitution request.
+
+- Retrieve the requested term or semester from the request data.
+- Consult `course_offerings_knowledge_base.txt` to determine the proposed course's offering status for that semester.
+- Apply the evaluation conditions defined in Section 7.
+
+## 5. Proposed Course Must Not Have Been Completed Previously
+
+The student must not have already completed the proposed replacement course.
+
+- Retrieve the student's transcript through the authorized `get_course_substitution_request()` RPC.
+- Check the transcript for the proposed course's `Course_ID`.
+- Use the available transcript records to determine whether the student has already completed the proposed course.
+- If the transcript is unavailable or incomplete, apply the evaluation conditions defined in Section 7.
+
+## 6. Academic Term Interpretation
+
+The academic term code follows the university's academic term coding system.
+
+- The first four digits identify the starting year of the academic year.
+- The last two digits identify the semester:
+  - `01` = Fall.
+  - `02` = Spring.
+
+Examples:
+
+- `202502` = Spring 2025–2026.
+- `202601` = Fall 2026–2027.
+- `202602` = Spring 2026–2027.
+- `202701` = Fall 2027–2028.
+- `202702` = Spring 2027–2028.
+
+The chronological order is:
+
+`202502` → `202601` → `202602` → `202701` → `202702`
+
+Use the academic term codes to determine the chronological order of Fall and Spring semesters. Use the course offerings knowledge base to determine whether courses are offered in Fall, Spring, or Summer. Summer availability is determined from the knowledge base and does not require a Summer term code.
+
+## 7. Eligibility Evaluation Conditions
+
+Evaluate each of the five eligibility conditions independently using the available request details, student records, transcript, course classification evidence, and course offerings knowledge base.
+
+Each condition must return exactly one of the following outcomes:
+
+- **PASS:** Available evidence confirms that the student satisfies the eligibility condition.
+- **FAIL:** Available evidence confirms that the student does not satisfy the eligibility condition.
+- **REQUIRES_REVIEW:** The condition cannot be reliably evaluated because required information is missing, incomplete, ambiguous, or unverified.
+
+Examples requiring review include:
+
+- A course offering is marked `Unknown` in `course_offerings_knowledge_base.txt`.
+- The original course's core/elective classification cannot be verified.
+- The student's transcript is unavailable or incomplete.
+- A course ID or academic term cannot be interpreted reliably.
+- The current academic term cannot be established when evaluating the remaining semesters before graduation.
+
+Do not treat missing information as proof of eligibility or ineligibility. Do not invent course offerings, course classifications, transcript records, or academic term mappings.
+
+### Overall Eligibility Decision
+
+Determine the overall result using the following rules:
+
+- **ELIGIBLE:** All five conditions return `PASS`.
+- **NOT_ELIGIBLE:** At least one condition returns `FAIL`.
+- **REQUIRES_REVIEW:** No condition returns `FAIL`, but at least one condition returns `REQUIRES_REVIEW`.
+
+If any condition returns `FAIL`, the overall result is `NOT_ELIGIBLE`, even if another condition returns `REQUIRES_REVIEW`. A confirmed failure is sufficient to establish that the request does not satisfy the defined eligibility criteria.
+
+The agent must preserve the result of each individual condition and provide the evidence supporting it.
+
+## Important Limitation
+
+These checks evaluate the five defined eligibility conditions only. They do not independently establish academic equivalency or guarantee final university approval.
