@@ -1,71 +1,64 @@
-
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+
+# Check statuses
 PASS = "PASS"
 FAIL = "FAIL"
 REQUIRES_REVIEW = "REQUIRES_REVIEW"
 
+# Overall outcomes
 ELIGIBLE = "ELIGIBLE"
 NOT_ELIGIBLE = "NOT_ELIGIBLE"
+MANUAL_REVIEW = "MANUAL_REVIEW"
 
+
+# Course offerings knowledge base
 KNOWLEDGE_BASE_PATH = (
     Path(__file__).resolve().parent
     / "data"
     / "course_offerings_knowledge_base.txt"
 )
 
-PASSING_GRADES = {
-    "A+", "A", "A-", "B+", "B", "B-",
-    "C+", "C", "C-", "D+", "D", "D-",
-    "P", "PASS",
-}
-
-NON_COMPLETION_GRADES = {"F", "WF", "W", "WD", "NP"}
-
-INCOMPLETE_GRADES = {"I", "IP", "INC", "INCOMPLETE"}
-
-
-# =========================================================
-# GENERAL HELPERS
-# =========================================================
 
 def make_check(condition, status, evidence):
+
     return {
         "condition": condition,
         "status": status,
-        "evidence": evidence,
+        "evidence": evidence
     }
 
 
 def parse_term(term):
-    """Validate a Fall/Spring academic term code."""
+
     text = str(term or "").strip()
 
-    if len(text) != 6 or not text.isdigit():
+    if (
+        len(text) != 6
+        or not text.isdigit()
+        or text[4:] not in {"01", "02"}
+    ):
         return None
 
-    year = int(text[:4])
-    semester_code = int(text[4:])
-
-    if semester_code not in (1, 2):
-        return None
-
-    return year, semester_code
+    return int(text[:4]), int(text[4:])
 
 
 def term_order(term):
-    """Return a value that preserves academic term chronology."""
+
     parsed = parse_term(term)
 
     if parsed is None:
         return None
 
     year, semester_code = parsed
+
     return year * 2 + semester_code - 1
 
 
 def term_to_semester(term):
+
     parsed = parse_term(term)
 
     if parsed is None:
@@ -75,7 +68,7 @@ def term_to_semester(term):
 
 
 def next_term(term):
-    """Return the next Fall/Spring term."""
+
     parsed = parse_term(term)
 
     if parsed is None:
@@ -90,50 +83,67 @@ def next_term(term):
 
 
 def get_current_term(today=None):
+
     """
-    Determine the current academic term using approximate
-    calendar boundaries.
-
-    January-May: Spring
-    August-December: Fall
-    June-July: Unknown
-
-    Adjust these boundaries if the official university
-    academic calendar requires different dates.
+    Academic term mapping:
+    August-December = Fall
+    January-May = Spring
+    June-July = Unknown
     """
-    today = today or date.today()
 
-    if 1 <= today.month <= 5:
-        return (today.year - 1) * 100 + 2
+    if today is None:
+
+        today = datetime.now(
+            ZoneInfo("Asia/Dubai")
+        ).date()
+
+    elif isinstance(today, datetime):
+
+        today = today.date()
+
+    elif not isinstance(today, date):
+
+        raise ValueError(
+            "today must be a date or datetime object"
+        )
 
     if 8 <= today.month <= 12:
         return today.year * 100 + 1
+
+    if 1 <= today.month <= 5:
+        return (today.year - 1) * 100 + 2
 
     return None
 
 
 def valid_course_id(course_id):
-    text = str(course_id or "").strip()
-    return len(text) == 7 and text.isdigit()
+
+    value = str(course_id or "").strip()
+
+    return len(value) == 7 and value.isdigit()
 
 
-# =========================================================
-# LOAD COURSE OFFERINGS KNOWLEDGE BASE
-# =========================================================
+# ---------------------------------------------------------
+# KNOWLEDGE BASE
+# ---------------------------------------------------------
 
 def load_course_knowledge_base(file_path=None):
-    """
-    Load course offerings from the knowledge base.
 
-    Supports rows with leading and trailing pipes, such as:
-    | 1501372 | Formal Languages and Automata Theory | No | Yes | No |
-
-    This function handles course offerings only.
-    Gemini verifies whether a course is compulsory or elective.
     """
-    path = Path(file_path) if file_path else KNOWLEDGE_BASE_PATH
+    Read course offerings from the local knowledge-base file.
+
+    Expected format:
+    Course_ID | Course_Name | Fall | Spring | Summer
+    """
+
+    path = (
+        Path(file_path)
+        if file_path
+        else KNOWLEDGE_BASE_PATH
+    )
 
     if not path.exists():
+
         raise FileNotFoundError(
             f"Course offerings knowledge base not found: {path}"
         )
@@ -141,28 +151,29 @@ def load_course_knowledge_base(file_path=None):
     courses = {}
 
     with path.open("r", encoding="utf-8-sig") as file:
+
         for raw_line in file:
+
             line = raw_line.strip()
 
             if not line or "|" not in line:
                 continue
 
-            # Remove outer pipes before splitting into columns.
-            line = line.strip("|").strip()
-            parts = [part.strip() for part in line.split("|")]
+            parts = [
+                part.strip()
+                for part in line.strip("|").strip().split("|")
+            ]
 
-            # Expected columns:
-            # Course ID | Course Name | Fall | Spring | Summer
             if len(parts) != 5:
                 continue
 
             course_id, course_name, fall, spring, summer = parts
 
-            # Ignore headings, section titles, and other non-course rows.
             if not valid_course_id(course_id):
                 continue
 
-            def normalize_offering(value):
+            def normalize(value):
+
                 value = value.strip().lower()
 
                 if value == "yes":
@@ -171,36 +182,32 @@ def load_course_knowledge_base(file_path=None):
                 if value == "no":
                     return "NO"
 
-                # Includes Unknown and older dash-based entries.
                 return "UNKNOWN"
 
             courses[course_id] = {
                 "course_id": course_id,
                 "course_name": course_name,
                 "offerings": {
-                    "Fall": normalize_offering(fall),
-                    "Spring": normalize_offering(spring),
-                    "Summer": normalize_offering(summer),
-                },
+                    "Fall": normalize(fall),
+                    "Spring": normalize(spring),
+                    "Summer": normalize(summer)
+                }
             }
 
     return courses
 
 
-# =========================================================
+# ---------------------------------------------------------
 # CHECK 1: ORIGINAL COURSE UNAVAILABLE BEFORE GRADUATION
-# =========================================================
+# ---------------------------------------------------------
 
 def check_original_course_unavailable(
     original_course,
     student,
     courses,
-    current_term,
+    current_term
 ):
-    """
-    PASS means the original course is not offered in any
-    remaining opportunity before or during graduation.
-    """
+
     name = "Original course unavailable before graduation"
 
     course_id = str(
@@ -208,107 +215,113 @@ def check_original_course_unavailable(
     ).strip()
 
     if not valid_course_id(course_id):
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The original course ID is missing or invalid.",
+            "The original course ID is missing or invalid."
         )
 
     course = courses.get(course_id)
 
     if course is None:
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            (
-                f"Course {course_id} is missing from the "
-                "offerings knowledge base."
-            ),
+            f"Course {course_id} is missing from the offerings knowledge base."
         )
 
-    graduation_term = student.get("expected_graduation_term")
+    graduation_term = student.get(
+        "expected_graduation_term"
+    )
 
     current_order = term_order(current_term)
     graduation_order = term_order(graduation_term)
 
     if current_order is None:
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The current academic term could not be determined.",
+            "The current academic term could not be determined."
         )
 
     if graduation_order is None:
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The expected graduation term is missing or invalid.",
+            "The expected graduation term is missing or invalid."
         )
 
     if graduation_order < current_order:
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            (
-                "The expected graduation term is earlier "
-                "than the current academic term."
-            ),
+            "The expected graduation term is earlier than the current academic term."
         )
 
     checked = []
+
     term = current_term
 
     while term_order(term) <= graduation_order:
+
         semester = term_to_semester(term)
+
         offering = course["offerings"][semester]
 
-        checked.append(f"{semester} ({term}): {offering}")
+        checked.append(
+            f"{semester} ({term}): {offering}"
+        )
 
         if offering == "YES":
+
             return make_check(
                 name,
                 FAIL,
-                (
-                    f"{course['course_name']} is offered in "
-                    f"a remaining {semester} semester. "
-                    f"Checked: {', '.join(checked)}."
-                ),
+                f"{course['course_name']} is offered in a remaining "
+                f"{semester} semester. Checked: {', '.join(checked)}."
             )
 
         if offering == "UNKNOWN":
+
             return make_check(
                 name,
                 REQUIRES_REVIEW,
-                (
-                    f"The offering status for {course['course_name']} "
-                    f"is unknown in {semester}. "
-                    f"Checked: {', '.join(checked)}."
-                ),
+                f"The offering status for {course['course_name']} "
+                f"is unknown in {semester}. Checked: {', '.join(checked)}."
             )
 
-        # Check Summer between Spring and a later graduation term.
+        # Check Summer between Spring and a later semester
         if (
             semester == "Spring"
             and term_order(term) < graduation_order
         ):
+
             summer = course["offerings"]["Summer"]
-            checked.append(f"Summer after {term}: {summer}")
+
+            checked.append(
+                f"Summer after {term}: {summer}"
+            )
 
             if summer == "YES":
+
                 return make_check(
                     name,
                     FAIL,
-                    (
-                        f"{course['course_name']} is offered in "
-                        "Summer before the expected graduation semester."
-                    ),
+                    f"{course['course_name']} is offered in "
+                    "Summer before the expected graduation semester."
                 )
 
             if summer == "UNKNOWN":
+
                 return make_check(
                     name,
                     REQUIRES_REVIEW,
-                    "The Summer offering status is unknown.",
+                    "The Summer offering status is unknown."
                 )
 
         if term == graduation_term:
@@ -317,28 +330,27 @@ def check_original_course_unavailable(
         term = next_term(term)
 
         if term is None:
+
             return make_check(
                 name,
                 REQUIRES_REVIEW,
-                "Could not determine the remaining academic terms.",
+                "Could not determine the remaining academic terms."
             )
 
     return make_check(
         name,
         PASS,
-        (
-            f"{course['course_name']} is not offered in any remaining "
-            "semester through graduation. "
-            f"Checked: {', '.join(checked)}."
-        ),
+        f"{course['course_name']} is not offered in any remaining "
+        f"semester through graduation. Checked: {', '.join(checked)}."
     )
 
 
-# =========================================================
-# CHECK 2: PROPOSED COURSE AT SAME LEVEL OR HIGHER
-# =========================================================
+# ---------------------------------------------------------
+# CHECK 2: PROPOSED COURSE IS AT THE SAME LEVEL OR HIGHER
+# ---------------------------------------------------------
 
 def check_course_level(original_course, proposed_course):
+
     name = "Proposed course is at the same level or higher"
 
     original_id = str(
@@ -353,15 +365,13 @@ def check_course_level(original_course, proposed_course):
         not valid_course_id(original_id)
         or not valid_course_id(proposed_id)
     ):
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "One or both course IDs are missing or invalid.",
+            "One or both course IDs are missing or invalid."
         )
 
-    # Project rule:
-    # Fifth digit = intended year.
-    # Final two digits = course level.
     original_year = int(original_id[4])
     proposed_year = int(proposed_id[4])
 
@@ -380,42 +390,30 @@ def check_course_level(original_course, proposed_course):
             and proposed_level >= original_level
         )
     ):
-        return make_check(name, PASS, evidence)
+
+        return make_check(
+            name,
+            PASS,
+            evidence
+        )
 
     return make_check(
         name,
         FAIL,
-        evidence + " The proposed course is lower under the defined rule.",
+        evidence + " The proposed course is lower under the defined rule."
     )
 
 
-# =========================================================
-# CHECK 3: ORIGINAL COURSE IS CORE
-# =========================================================
-
-def check_original_course_is_core_placeholder():
-    """
-    The actual core-course classification is performed by Gemini
-    in study_plan_check.py.
-
-    This placeholder is used only by the deterministic evaluator.
-    """
-    return make_check(
-        "Original course is a core course",
-        REQUIRES_REVIEW,
-        "Awaiting Gemini verification against the official program study plan.",
-    )
-
-
-# =========================================================
+# ---------------------------------------------------------
 # CHECK 4: PROPOSED COURSE OFFERED IN CURRENT SEMESTER
-# =========================================================
+# ---------------------------------------------------------
 
 def check_proposed_course_offering(
     proposed_course,
     courses,
-    current_term,
+    current_term
 ):
+
     name = "Proposed course is offered in the current semester"
 
     course_id = str(
@@ -423,67 +421,68 @@ def check_proposed_course_offering(
     ).strip()
 
     if not valid_course_id(course_id):
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The proposed course ID is missing or invalid.",
+            "The proposed course ID is missing or invalid."
         )
 
     course = courses.get(course_id)
 
     if course is None:
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            (
-                f"Course {course_id} is missing from the "
-                "offerings knowledge base."
-            ),
+            f"Course {course_id} is missing from the offerings knowledge base."
         )
 
     semester = term_to_semester(current_term)
 
     if semester is None:
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The current Fall/Spring semester could not be determined.",
+            "The current Fall/Spring semester could not be determined."
         )
 
     offering = course["offerings"][semester]
 
     if offering == "YES":
+
         return make_check(
             name,
             PASS,
-            f"{course['course_name']} is listed as offered in {semester}.",
+            f"{course['course_name']} is listed as offered in {semester}."
         )
 
     if offering == "NO":
+
         return make_check(
             name,
             FAIL,
-            f"{course['course_name']} is listed as not offered in {semester}.",
+            f"{course['course_name']} is listed as not offered in {semester}."
         )
 
     return make_check(
         name,
         REQUIRES_REVIEW,
-        (
-            f"The knowledge base does not specify whether "
-            f"{course['course_name']} is offered in {semester}."
-        ),
+        f"The knowledge base does not specify whether "
+        f"{course['course_name']} is offered in {semester}."
     )
 
 
-# =========================================================
+# ---------------------------------------------------------
 # CHECK 5: PROPOSED COURSE NOT COMPLETED PREVIOUSLY
-# =========================================================
+# ---------------------------------------------------------
 
 def check_proposed_course_not_completed(
     proposed_course,
-    transcript,
+    course_completion
 ):
+
     name = "Proposed course has not been completed previously"
 
     proposed_id = str(
@@ -491,108 +490,103 @@ def check_proposed_course_not_completed(
     ).strip()
 
     if not valid_course_id(proposed_id):
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The proposed course ID is missing or invalid.",
+            "The proposed course ID is missing or invalid."
         )
 
-    if not isinstance(transcript, list):
+    if (
+        not isinstance(course_completion, dict)
+        or "proposed_course_completed" not in course_completion
+    ):
+
         return make_check(
             name,
             REQUIRES_REVIEW,
-            "The transcript is missing or has an unexpected format.",
+            "The student's course-completion information is unavailable."
         )
 
-    records = [
-        record
-        for record in transcript
-        if isinstance(record, dict)
-        and str(record.get("course_id", "")).strip() == proposed_id
+    completed = course_completion[
+        "proposed_course_completed"
     ]
 
-    if not records:
-        return make_check(
-            name,
-            PASS,
-            f"Course {proposed_id} does not appear in the transcript.",
-        )
+    if completed is True:
 
-    grades = [
-        str(record.get("grade", "")).strip().upper()
-        for record in records
-    ]
-
-    if any(grade in PASSING_GRADES for grade in grades):
         return make_check(
             name,
             FAIL,
-            (
-                f"Course {proposed_id} appears with a passing grade: "
-                f"{', '.join(grades)}."
-            ),
+            f"Course {proposed_id} has previously been completed with a passing grade."
         )
 
-    if any(
-        not grade
-        or grade in INCOMPLETE_GRADES
-        or grade not in NON_COMPLETION_GRADES
-        for grade in grades
-    ):
+    if completed is False:
+
         return make_check(
             name,
-            REQUIRES_REVIEW,
-            (
-                f"Course {proposed_id} appears, but completion cannot "
-                f"be confirmed. Grades: {', '.join(grades)}."
-            ),
+            PASS,
+            f"Course {proposed_id} has not been completed with a passing grade."
         )
 
     return make_check(
         name,
-        PASS,
-        (
-            f"Course {proposed_id} appears only with non-completion "
-            f"grade(s): {', '.join(grades)}."
-        ),
+        REQUIRES_REVIEW,
+        "The student's course-completion status could not be determined."
     )
 
 
-# =========================================================
-# OVERALL ELIGIBILITY RESULT
-# =========================================================
+# ---------------------------------------------------------
+# OVERALL RESULT
+# ---------------------------------------------------------
 
 def build_overall_result(request, current_term, checks):
-    statuses = [check["status"] for check in checks]
 
+    statuses = [
+        check["status"]
+        for check in checks
+    ]
+
+    # Any confirmed failure means NOT_ELIGIBLE
     if FAIL in statuses:
+
         overall = NOT_ELIGIBLE
-    elif statuses and all(status == PASS for status in statuses):
+
+    # All checks must pass for ELIGIBLE
+    elif statuses and all(
+        status == PASS for status in statuses
+    ):
+
         overall = ELIGIBLE
+
+    # Any unresolved check means MANUAL_REVIEW
     else:
-        overall = REQUIRES_REVIEW
+
+        overall = MANUAL_REVIEW
 
     return {
         "request_id": request.get("request_id"),
         "current_term": current_term,
         "current_semester": term_to_semester(current_term),
         "overall_result": overall,
-        "checks": checks,
+        "checks": checks
     }
 
+
+# ---------------------------------------------------------
+# RUN ALL DETERMINISTIC CHECKS
+# ---------------------------------------------------------
 
 def evaluate_deterministic_checks(
     request,
     current_date=None,
-    knowledge_base_path=None,
+    knowledge_base_path=None
 ):
-    """
-    Run deterministic checks.
 
-    The compulsory/core classification is intentionally left to Gemini.
-    """
     if not isinstance(request, dict):
-        raise ValueError("Request must be a dictionary.")
+
+        raise ValueError(
+            "Request must be a dictionary."
+        )
 
     student = (
         request.get("student")
@@ -612,53 +606,135 @@ def evaluate_deterministic_checks(
         else {}
     )
 
-    transcript = request.get("transcript")
+    course_completion = request.get(
+        "course_completion"
+    )
+
     current_term = get_current_term(current_date)
 
     try:
-        courses = load_course_knowledge_base(knowledge_base_path)
+
+        courses = load_course_knowledge_base(
+            knowledge_base_path
+        )
 
     except (OSError, UnicodeError) as exc:
-        message = (
+
+        error = (
             f"Could not load course offerings knowledge base: {exc}"
         )
 
         checks = [
+
             make_check(
                 "Original course unavailable before graduation",
                 REQUIRES_REVIEW,
-                message,
+                error
             ),
-            check_course_level(original, proposed),
-            check_original_course_is_core_placeholder(),
+
+            check_course_level(
+                original,
+                proposed
+            ),
+
+            make_check(
+                "Original course is a core course",
+                REQUIRES_REVIEW,
+                "Awaiting verification against the official program study plan."
+            ),
+
             make_check(
                 "Proposed course is offered in the current semester",
                 REQUIRES_REVIEW,
-                message,
+                error
             ),
-            check_proposed_course_not_completed(proposed, transcript),
+
+            check_proposed_course_not_completed(
+                proposed,
+                course_completion
+            )
         ]
 
-        return build_overall_result(request, current_term, checks)
+        return build_overall_result(
+            request,
+            current_term,
+            checks
+        )
 
     checks = [
+
         check_original_course_unavailable(
             original,
             student,
             courses,
-            current_term,
+            current_term
         ),
-        check_course_level(original, proposed),
-        check_original_course_is_core_placeholder(),
+
+        check_course_level(
+            original,
+            proposed
+        ),
+
+        make_check(
+            "Original course is a core course",
+            REQUIRES_REVIEW,
+            "Awaiting verification against the official program study plan."
+        ),
+
         check_proposed_course_offering(
             proposed,
             courses,
-            current_term,
+            current_term
         ),
+
         check_proposed_course_not_completed(
             proposed,
-            transcript,
-        ),
+            course_completion
+        )
     ]
 
-    return build_overall_result(request, current_term, checks)
+    return build_overall_result(
+        request,
+        current_term,
+        checks
+    )
+
+
+# ---------------------------------------------------------
+# REJECTION SUGGESTIONS
+# ---------------------------------------------------------
+
+def get_rejection_suggestion(checks):
+
+    """
+    Return one short suggestion based on the first failed check.
+    """
+
+    suggestions = {
+
+        "Original course unavailable before graduation":
+            "The original course is available before graduation. Consider registering for it instead of requesting a substitution.",
+
+        "Proposed course is at the same level or higher":
+            "Choose a replacement course at the same academic level or a higher level than the original course.",
+
+        "Original course is a core course":
+            "Course substitution is intended for core requirements. Review the study plan and select an eligible core course.",
+
+        "Proposed course is offered in the current semester":
+            "Choose a replacement course that is offered in the current semester.",
+
+        "Proposed course has not been completed previously":
+            "Choose a replacement course that you have not already completed with a passing grade."
+    }
+
+    for check in checks:
+
+        if check["status"] == FAIL:
+
+            return suggestions.get(
+                check["condition"],
+                "Review the failed eligibility condition and submit a request that meets the requirement."
+            )
+
+    return None

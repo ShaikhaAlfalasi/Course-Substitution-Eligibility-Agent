@@ -20,8 +20,8 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # Models are ordered from preferred to fallback.
 # gemini-3.8-flash has already been tested successfully.
 GEMINI_MODELS = [
+    "gemini-3.5-flash-lite", 
     "gemini-3.8-flash",
-    "gemini-3.5-flash-lite",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",

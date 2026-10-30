@@ -1,9 +1,11 @@
 
-from database import get_course_substitution_request
+from services.database import get_course_substitution_request
+
 from eligibility_checks import (
     evaluate_deterministic_checks,
     build_overall_result,
 )
+
 from study_plan_check import check_original_course_is_core
 
 
@@ -74,14 +76,16 @@ def display_check(check, number):
     status = check["status"]
     evidence = check.get("evidence", "")
 
-    # Keep Gemini's core-course evidence short and readable.
     if condition == "Original course is a core course":
         if status == "PASS":
             evidence = "Confirmed compulsory in the official study plan."
         elif status == "FAIL":
             evidence = "The official study plan classifies it as an elective."
         else:
-            evidence = "Could not verify its classification in the official study plan."
+            evidence = (
+                "Could not verify its classification "
+                "in the official study plan."
+            )
 
     print(f"\n{number}. {condition}")
     print("   Result:", status)
@@ -89,12 +93,15 @@ def display_check(check, number):
 
 
 def run_request(request_id):
+    """Retrieve and evaluate one Course Substitution request."""
+
     request = get_course_substitution_request(request_id)
 
     if request is None:
         return None, None
 
     result = evaluate_request(request)
+
     return request, result
 
 

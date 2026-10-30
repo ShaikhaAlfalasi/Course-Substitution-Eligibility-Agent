@@ -3,7 +3,7 @@ import json
 import re
 from pathlib import Path
 
-from llm_client import generate_with_fallback
+from services.llm_client import generate_with_fallback
 
 CATALOG_PATH = (
     Path(__file__).resolve().parent

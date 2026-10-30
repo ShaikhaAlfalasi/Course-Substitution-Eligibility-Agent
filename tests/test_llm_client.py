@@ -1,5 +1,5 @@
 
-from llm_client import generate_with_fallback
+from services.llm_client import generate_with_fallback
 
 
 if __name__ == "__main__":

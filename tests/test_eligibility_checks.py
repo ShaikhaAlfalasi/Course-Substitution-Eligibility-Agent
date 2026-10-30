@@ -1,5 +1,5 @@
 
-from database import get_course_substitution_request
+from services.database import get_course_substitution_request
 from eligibility_checks import evaluate_eligibility
 
 

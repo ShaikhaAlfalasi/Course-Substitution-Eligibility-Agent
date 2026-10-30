@@ -1,9 +1,9 @@
-
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
+DATABASE_URL = os.getenv("DATABASE_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -11,8 +11,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def validate_config():
     required = {
-        "SUPABASE_URL": SUPABASE_URL,
-        "SUPABASE_KEY": SUPABASE_KEY,
+        "DATABASE_URL": DATABASE_URL,
         "GEMINI_API_KEY": GEMINI_API_KEY,
     }
 
